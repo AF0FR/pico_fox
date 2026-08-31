@@ -13,6 +13,7 @@ add_executable(PicoFox
     src/main.c
     src/audio.c
     src/fox.c
+    src/keep_alive.c
     src/morse.c
     src/radio.c
 )

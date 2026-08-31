@@ -7,6 +7,13 @@
 #define PTT_PIN   15u
 #define AUDIO_PIN 16u
 
+// USB power-bank keep-alive load. GP18 drives an external logic-level
+// N-channel MOSFET; it must not drive the load resistor directly.
+#define KEEP_ALIVE_PIN          18u
+#define KEEP_ALIVE_ACTIVE_LEVEL 1
+#define KEEP_ALIVE_PULSE_MS     1000u
+#define KEEP_ALIVE_PERIOD_MS    5000u
+
 // Set to 0 if the PTT interface is active-low at the Pico GPIO.
 #define PTT_ACTIVE_LEVEL 1
 
