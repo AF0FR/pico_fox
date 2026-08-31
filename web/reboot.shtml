@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PicoFox rebooting</title><style>
+:root{color-scheme:dark}body{font:16px system-ui;margin:auto;max-width:560px;padding:32px;background:#111827;color:#f3f4f6}h1{color:#fb923c}.card{border:1px solid #374151;border-radius:10px;padding:20px}
+</style></head><body><div class="card"><h1>Reboot queued</h1><p>At the next off-air boundary, PicoFox will save pending settings, transmit its station ID once in CW, and restart.</p><p>Reconnect to its Wi-Fi network after the ID finishes.</p></div></body></html>

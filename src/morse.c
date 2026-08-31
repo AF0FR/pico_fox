@@ -9,6 +9,8 @@
 #include "audio.h"
 #include "config.h"
 #include "radio.h"
+#include "settings.h"
+#include "station_control.h"
 
 typedef struct {
     char character;
@@ -28,11 +30,6 @@ static const morse_entry_t morse_table[] = {
     {'/', "-..-."}
 };
 
-static uint32_t dit_ms(void)
-{
-    return 1200u / CW_WPM;
-}
-
 static const char *lookup(char character)
 {
     for (size_t i = 0; i < sizeof(morse_table) / sizeof(morse_table[0]); ++i) {
@@ -43,29 +40,40 @@ static const char *lookup(char character)
     return NULL;
 }
 
-static void send_character(const char *pattern)
+static void send_character(const char *pattern, uint32_t dit_ms, uint32_t tone_hz)
 {
     for (size_t i = 0; pattern[i] != '\0'; ++i) {
-        audio_start_tone(CW_TONE_HZ);
-        sleep_ms(pattern[i] == '-' ? 3u * dit_ms() : dit_ms());
+        if (!station_control_transmission_allowed()) {
+            return;
+        }
+        audio_start_tone(tone_hz);
+        sleep_ms(pattern[i] == '-' ? 3u * dit_ms : dit_ms);
         audio_stop();
 
         if (pattern[i + 1] != '\0') {
-            sleep_ms(dit_ms());
+            sleep_ms(dit_ms);
         }
     }
 }
 
 void morse_transmit(const char *text)
 {
-    radio_ptt_on();
+    fox_settings_t settings;
+    settings_get(&settings);
+    const uint32_t dit_ms = 1200u / settings.cw_wpm;
+    if (!radio_ptt_on()) {
+        return;
+    }
 
     bool sent_character = false;
     for (size_t i = 0; text[i] != '\0'; ++i) {
+        if (!station_control_transmission_allowed()) {
+            break;
+        }
         const char character = (char)toupper((unsigned char)text[i]);
         if (character == ' ') {
             if (sent_character) {
-                sleep_ms(7u * dit_ms());
+                sleep_ms(7u * dit_ms);
                 sent_character = false;
             }
             continue;
@@ -77,11 +85,12 @@ void morse_transmit(const char *text)
         }
 
         if (sent_character) {
-            sleep_ms(3u * dit_ms());
+            sleep_ms(3u * dit_ms);
         }
-        send_character(pattern);
+        send_character(pattern, dit_ms, settings.cw_tone_hz);
         sent_character = true;
     }
 
-    radio_ptt_off();
+    // The caller decides whether the following pause is long enough to
+    // release PTT. The final Morse element has already stopped the audio.
 }

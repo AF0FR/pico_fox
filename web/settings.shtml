@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PicoFox Settings</title><style>
+:root{color-scheme:dark}body{font:16px system-ui;margin:auto;max-width:680px;padding:20px;background:#111827;color:#f3f4f6}h1{color:#fb923c}nav{display:flex;gap:10px;margin-bottom:18px}nav a{color:#fff;text-decoration:none;padding:9px 14px;border-radius:7px;background:#374151}nav a.active{background:#f97316}fieldset{border:1px solid #374151;border-radius:10px;margin:14px 0;padding:14px}legend{font-weight:700}label{display:grid;grid-template-columns:1fr 8rem;gap:10px;align-items:center;margin:9px 0}.default{font-size:12px;color:#9ca3af;font-weight:400;white-space:nowrap}.range{display:flex;align-items:center;gap:8px}.range output{min-width:2.5rem;text-align:right}input{font:inherit;padding:8px;border-radius:6px;border:1px solid #6b7280;background:#1f2937;color:#fff;width:100%;box-sizing:border-box}button{width:100%;padding:13px;border:0;border-radius:8px;background:#f97316;color:#fff;font-size:18px;font-weight:700}.reboot{background:#b91c1c;margin-top:18px}.cancel{background:#4b5563}.danger{border:1px solid #b91c1c;border-radius:10px;padding:14px;margin-top:10px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions .reboot{margin-top:0}.note{color:#9ca3af;font-size:14px}[hidden]{display:none!important}input[type=checkbox]{width:auto;justify-self:end;transform:scale(1.4)}
+@media(max-width:480px){label{grid-template-columns:1fr}}
+</style></head><body><h1>PicoFox</h1><nav><a href="/index.shtml">Dashboard</a><a class="active" href="/settings.shtml">Settings</a></nav>
+<form action="/save.cgi" method="get">
+<fieldset><legend>Wi-Fi access point</legend>
+<label><span>Network name <small class="default">(default: PicoFox)</small></span><input name="ssid" maxlength="32" required value="<!--#ssid-->"></label>
+<label><span>New password <small class="default">(default: picofox1)</small></span><input name="password" type="password" minlength="8" maxlength="63" placeholder="Leave blank to keep current"></label>
+<p class="note">Wi-Fi changes take effect after reboot.</p></fieldset>
+<fieldset><legend>USB power bank</legend><input type="hidden" name="kap" value="1">
+<label><span>Pulse dummy load <small class="default">(default: enabled)</small></span><input name="ka" type="checkbox" value="1" <!--#kacheck-->></label></fieldset>
+<fieldset><legend>Station and audio</legend>
+<label><span>Station ID <small class="default">(default: KB0TLL)</small></span><input name="id" maxlength="15" value="<!--#id-->"></label>
+<label><span>CW speed <small class="default">(default: 18 WPM)</small></span><input name="wpm" type="number" min="5" max="40" value="<!--#wpm-->"></label>
+<label><span>CW tone <small class="default">(default: 500 Hz)</small></span><input name="cw" type="number" min="200" max="2000" value="<!--#cw-->"></label>
+<label><span>Output gain <small class="default">(default: 50%)</small></span><span class="range"><input name="gain" type="range" min="5" max="100" value="<!--#gain-->" oninput="gainValue.value=value"><output id="gainValue"><!--#gain--></output></span></label>
+</fieldset><fieldset><legend>Warble</legend>
+<label><span>Low frequency <small class="default">(default: 300 Hz)</small></span><input name="wl" type="number" min="200" max="2500" value="<!--#wl-->"></label>
+<label><span>High frequency <small class="default">(default: 800 Hz)</small></span><input name="wh" type="number" min="200" max="2500" value="<!--#wh-->"></label>
+<label><span>Switch interval <small class="default">(default: 140 ms)</small></span><input name="ws" type="number" min="50" max="1000" value="<!--#ws-->"></label>
+<label><span>Duration <small class="default">(default: 5000 ms)</small></span><input name="wd" type="number" min="500" max="30000" value="<!--#wd-->"></label>
+</fieldset><fieldset><legend>Sweep</legend>
+<label><span>Low frequency <small class="default">(default: 300 Hz)</small></span><input name="sl" type="number" min="200" max="2500" value="<!--#sl-->"></label>
+<label><span>High frequency <small class="default">(default: 800 Hz)</small></span><input name="sh" type="number" min="200" max="2500" value="<!--#sh-->"></label>
+<label><span>Frequency step <small class="default">(default: 20 Hz)</small></span><input name="ss" type="number" min="1" max="200" value="<!--#ss-->"></label>
+<label><span>Step time <small class="default">(default: 20 ms)</small></span><input name="sm" type="number" min="5" max="500" value="<!--#sm-->"></label>
+<label><span>Duration <small class="default">(default: 5000 ms)</small></span><input name="sd" type="number" min="500" max="30000" value="<!--#sd-->"></label>
+</fieldset><fieldset><legend>Sequence pauses</legend>
+<label><span>After FOX <small class="default">(default: 1000 ms)</small></span><input name="fp" type="number" min="0" max="30000" value="<!--#fp-->"></label>
+<label><span>After tone <small class="default">(default: 5000 ms)</small></span><input name="tp" type="number" min="0" max="60000" value="<!--#tp-->"></label>
+<label><span>Idle duration <small class="default">(default: 15000 ms)</small></span><input name="idle" type="number" min="0" max="60000" value="<!--#idle-->"></label>
+<p class="note">Pauses below 500 ms keep PTT keyed with silent audio.</p>
+</fieldset><button type="submit">Apply settings</button></form>
+<p class="note">Changes apply at the next stage and save during the next off-air pause.</p>
+<button class="reboot" id="reboot-arm" type="button">Reboot PicoFox</button>
+<section class="danger" id="reboot-confirm" hidden><strong>Reboot PicoFox?</strong><p>The station ID will be transmitted once, then the controller will restart.</p><div class="actions"><button class="cancel" id="reboot-cancel" type="button">Cancel</button><button class="reboot" id="reboot-send" type="button">Reboot now</button></div></section>
+<p class="note" id="reboot-status" role="status" aria-live="polite"></p>
+<script>
+const arm=document.getElementById('reboot-arm'),panel=document.getElementById('reboot-confirm'),cancel=document.getElementById('reboot-cancel'),send=document.getElementById('reboot-send'),status=document.getElementById('reboot-status');
+arm.addEventListener('click',()=>{panel.hidden=false;arm.hidden=true;});cancel.addEventListener('click',()=>{panel.hidden=true;arm.hidden=false;});send.addEventListener('click',async()=>{send.disabled=true;cancel.disabled=true;status.textContent='Queuing reboot...';try{await fetch('/reboot.cgi?request=1',{cache:'no-store'});status.textContent='Reboot queued. Waiting for the station ID...';panel.hidden=true;}catch(e){status.textContent='Connection closed. PicoFox may be rebooting.';panel.hidden=true;}});
+</script></body></html>

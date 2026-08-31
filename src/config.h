@@ -11,8 +11,13 @@
 // N-channel MOSFET; it must not drive the load resistor directly.
 #define KEEP_ALIVE_PIN          18u
 #define KEEP_ALIVE_ACTIVE_LEVEL 1
+#define KEEP_ALIVE_ENABLED      1
 #define KEEP_ALIVE_PULSE_MS     1000u
 #define KEEP_ALIVE_PERIOD_MS    5000u
+
+// Pico 2 W access point. WPA2 passwords must contain at least 8 characters.
+#define WIFI_AP_SSID     "PicoFox"
+#define WIFI_AP_PASSWORD "picofox1"
 
 // Set to 0 if the PTT interface is active-low at the Pico GPIO.
 #define PTT_ACTIVE_LEVEL 1
@@ -20,6 +25,7 @@
 // Morse settings.
 #define CW_WPM     18u
 #define CW_TONE_HZ 500u
+#define AUDIO_GAIN_PERCENT 50u
 
 // Warble settings.
 #define WARBLE_LOW_HZ      300u
@@ -37,7 +43,11 @@
 // Off-air intervals.
 #define FOX_PAUSE_MS   1000u
 #define TONE_PAUSE_MS  5000u
-#define FINAL_PAUSE_MS 15000u
+#define IDLE_DURATION_MS 15000u
+
+// Pauses shorter than this remain keyed with silent audio. Longer pauses
+// release PTT normally.
+#define PTT_RELEASE_PAUSE_MS 500u
 
 // Radio key-up and key-down protection.
 #define PTT_LEAD_MS 150u

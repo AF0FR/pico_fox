@@ -7,6 +7,8 @@
 #include "pico/stdlib.h"
 
 #include "config.h"
+#include "settings.h"
+#include "station_control.h"
 
 static uint audio_slice;
 static uint audio_channel;
@@ -22,13 +24,16 @@ void audio_init(void)
 void audio_start_tone(uint32_t frequency_hz)
 {
     const uint16_t wrap = 4095u;
+    fox_settings_t settings;
+    settings_get(&settings);
     const float divider = (float)clock_get_hz(clk_sys) /
                           ((float)frequency_hz * (float)(wrap + 1u));
 
     pwm_set_enabled(audio_slice, false);
     pwm_set_clkdiv(audio_slice, divider);
     pwm_set_wrap(audio_slice, wrap);
-    pwm_set_chan_level(audio_slice, audio_channel, (wrap + 1u) / 2u);
+    pwm_set_chan_level(audio_slice, audio_channel,
+                       ((uint32_t)(wrap + 1u) * settings.audio_gain_percent) / 200u);
     pwm_set_counter(audio_slice, 0u);
     pwm_set_enabled(audio_slice, true);
 }
@@ -44,15 +49,18 @@ void audio_stop(void)
 
 void audio_play_warble(void)
 {
-    const absolute_time_t deadline = make_timeout_time_ms(WARBLE_DURATION_MS);
+    fox_settings_t settings;
+    settings_get(&settings);
+    const absolute_time_t deadline = make_timeout_time_ms(settings.warble_duration_ms);
     bool use_high_tone = false;
 
-    while (!time_reached(deadline)) {
-        audio_start_tone(use_high_tone ? WARBLE_HIGH_HZ : WARBLE_LOW_HZ);
+    while (!time_reached(deadline) && station_control_transmission_allowed()) {
+        audio_start_tone(use_high_tone ? settings.warble_high_hz : settings.warble_low_hz);
         use_high_tone = !use_high_tone;
 
         const int64_t remaining_ms = absolute_time_diff_us(get_absolute_time(), deadline) / 1000;
-        sleep_ms(remaining_ms < WARBLE_SWITCH_MS ? (uint32_t)remaining_ms : WARBLE_SWITCH_MS);
+        sleep_ms(remaining_ms < settings.warble_switch_ms ?
+                 (uint32_t)remaining_ms : settings.warble_switch_ms);
     }
 
     audio_stop();
@@ -60,23 +68,26 @@ void audio_play_warble(void)
 
 void audio_play_sweep(void)
 {
-    const absolute_time_t deadline = make_timeout_time_ms(SWEEP_DURATION_MS);
-    int frequency = SWEEP_LOW_HZ;
-    int step = SWEEP_STEP_HZ;
+    fox_settings_t settings;
+    settings_get(&settings);
+    const absolute_time_t deadline = make_timeout_time_ms(settings.sweep_duration_ms);
+    int frequency = settings.sweep_low_hz;
+    int step = settings.sweep_step_hz;
 
-    while (!time_reached(deadline)) {
+    while (!time_reached(deadline) && station_control_transmission_allowed()) {
         audio_start_tone((uint32_t)frequency);
 
         const int64_t remaining_ms = absolute_time_diff_us(get_absolute_time(), deadline) / 1000;
-        sleep_ms(remaining_ms < SWEEP_STEP_MS ? (uint32_t)remaining_ms : SWEEP_STEP_MS);
+        sleep_ms(remaining_ms < settings.sweep_step_ms ?
+                 (uint32_t)remaining_ms : settings.sweep_step_ms);
 
         frequency += step;
-        if (frequency >= (int)SWEEP_HIGH_HZ) {
-            frequency = SWEEP_HIGH_HZ;
-            step = -(int)SWEEP_STEP_HZ;
-        } else if (frequency <= (int)SWEEP_LOW_HZ) {
-            frequency = SWEEP_LOW_HZ;
-            step = SWEEP_STEP_HZ;
+        if (frequency >= (int)settings.sweep_high_hz) {
+            frequency = settings.sweep_high_hz;
+            step = -(int)settings.sweep_step_hz;
+        } else if (frequency <= (int)settings.sweep_low_hz) {
+            frequency = settings.sweep_low_hz;
+            step = settings.sweep_step_hz;
         }
     }
 

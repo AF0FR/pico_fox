@@ -5,6 +5,7 @@
 #include "pico/stdlib.h"
 
 #include "config.h"
+#include "settings.h"
 
 // A short timer tick keeps the configured pulse and period easy to tune. The
 // callback only writes a GPIO, so it is safe to run from the timer IRQ context.
@@ -28,6 +29,7 @@
 
 static struct repeating_timer keep_alive_timer;
 static uint32_t phase_ms;
+static volatile bool keep_alive_enabled;
 
 static void set_load(bool enabled)
 {
@@ -39,6 +41,11 @@ static bool keep_alive_callback(struct repeating_timer *timer)
 {
     (void)timer;
 
+    if (!keep_alive_enabled) {
+        set_load(false);
+        return true;
+    }
+
     phase_ms = (phase_ms + KEEP_ALIVE_TICK_MS) % KEEP_ALIVE_PERIOD_MS;
     set_load(phase_ms < KEEP_ALIVE_PULSE_MS);
     return true;
@@ -46,12 +53,16 @@ static bool keep_alive_callback(struct repeating_timer *timer)
 
 void keep_alive_init(void)
 {
+    fox_settings_t settings;
+    settings_get(&settings);
+
     gpio_init(KEEP_ALIVE_PIN);
     gpio_set_dir(KEEP_ALIVE_PIN, GPIO_OUT);
 
     // Begin with a load pulse so the power bank sees it immediately at startup.
     phase_ms = 0u;
-    set_load(true);
+    keep_alive_enabled = settings.keep_alive_enabled != 0u;
+    set_load(keep_alive_enabled);
 
     // A negative interval schedules relative to the previous start time and
     // prevents cumulative drift in the five-second period.
@@ -59,4 +70,11 @@ void keep_alive_init(void)
                            keep_alive_callback,
                            NULL,
                            &keep_alive_timer);
+}
+
+void keep_alive_set_enabled(bool enabled)
+{
+    keep_alive_enabled = enabled;
+    phase_ms = 0u;
+    set_load(enabled);
 }

@@ -1,45 +1,111 @@
 #include "radio.h"
 
 #include "pico/stdlib.h"
+#include "pico/cyw43_arch.h"
+#include "hardware/watchdog.h"
 
 #include "audio.h"
 #include "config.h"
+#include "morse.h"
+#include "settings.h"
+#include "station_control.h"
+#include "web.h"
+#include "workflow.h"
 
 static inline int ptt_inactive_level(void)
 {
     return !PTT_ACTIVE_LEVEL;
 }
 
+static volatile bool ptt_active;
+
 void radio_init(void)
 {
     gpio_init(PTT_PIN);
     gpio_set_dir(PTT_PIN, GPIO_OUT);
     gpio_put(PTT_PIN, ptt_inactive_level());
+    ptt_active = false;
 
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-    gpio_put(PICO_DEFAULT_LED_PIN, 0);
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 }
 
-void radio_ptt_on(void)
+bool radio_ptt_on(void)
 {
+    if (!station_control_transmission_allowed()) {
+        return false;
+    }
+    if (ptt_active) {
+        return true;
+    }
     gpio_put(PTT_PIN, PTT_ACTIVE_LEVEL);
-    gpio_put(PICO_DEFAULT_LED_PIN, 1);
+    ptt_active = true;
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
     sleep_ms(PTT_LEAD_MS);
+    if (!station_control_transmission_allowed()) {
+        radio_force_ptt_off();
+        return false;
+    }
+    return true;
+}
+
+void radio_force_ptt_off(void)
+{
+    gpio_put(PTT_PIN, ptt_inactive_level());
+    ptt_active = false;
 }
 
 void radio_ptt_off(void)
 {
     audio_stop();
-    sleep_ms(PTT_TAIL_MS);
+    if (ptt_active) {
+        sleep_ms(PTT_TAIL_MS);
+    }
     gpio_put(PTT_PIN, ptt_inactive_level());
-    gpio_put(PICO_DEFAULT_LED_PIN, 0);
+    ptt_active = false;
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 }
 
 void radio_pause_ms(unsigned milliseconds)
 {
     audio_stop();
-    gpio_put(PTT_PIN, ptt_inactive_level());
-    gpio_put(PICO_DEFAULT_LED_PIN, 0);
-    sleep_ms(milliseconds);
+    if (milliseconds >= PTT_RELEASE_PAUSE_MS ||
+        station_control_stop_requested() || web_reboot_requested()) {
+        radio_ptt_off();
+    }
+    const absolute_time_t deadline = make_timeout_time_ms(milliseconds);
+    do {
+        if (station_control_stop_requested()) {
+            fox_settings_t settings;
+            settings_get(&settings);
+            station_control_begin_stop_id();
+            workflow_set(WORKFLOW_STOP_ID);
+            morse_transmit(settings.station_id);
+            radio_ptt_off();
+            station_control_complete_stop();
+            workflow_set(WORKFLOW_STOPPED);
+        }
+
+        const bool settings_saved = settings_save_if_dirty();
+        if (settings_saved && web_reboot_requested()) {
+            // Give lwIP time to deliver the confirmation page before restarting.
+            sleep_ms(1000);
+            fox_settings_t settings;
+            settings_get(&settings);
+            station_control_set_enabled(true);
+            workflow_set(WORKFLOW_REBOOT_ID);
+            morse_transmit(settings.station_id);
+            radio_ptt_off();
+            watchdog_reboot(0, 0, 0);
+            while (true) {
+                tight_loop_contents();
+            }
+        }
+
+        if (time_reached(deadline)) {
+            break;
+        }
+        const int64_t remaining_ms =
+            absolute_time_diff_us(get_absolute_time(), deadline) / 1000;
+        sleep_ms(remaining_ms < 100 ? (uint32_t)remaining_ms : 100u);
+    } while (true);
 }

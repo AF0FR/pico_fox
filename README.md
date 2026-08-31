@@ -1,7 +1,8 @@
 # PicoFox
 
-PicoFox is a Raspberry Pi Pico/Pico W audio fox controller for an FM radio. It
-keys PTT on GP15 and generates mic-level tone audio with PWM on GP16.
+PicoFox is a Raspberry Pi Pico 2 W audio fox controller for an FM radio. It
+keys PTT on GP15 and generates adjustable PWM tone audio on GP16. The Pico 2 W
+also hosts its own Wi-Fi access point and phone-friendly configuration page.
 
 It also pulses an external dummy load through a MOSFET on GP18 for USB power
 banks that shut down when the Pico's current draw is too low. By default the
@@ -13,26 +14,86 @@ The repeating sequence is:
 2. 700/1100 Hz warble for 5 seconds, then 5 seconds off air
 3. `FOX` in Morse, then 1 second off air
 4. 500-1500-500 Hz sweep for 5 seconds, then 5 seconds off air
-5. `AF0FR AF0FR` in Morse, then 15 seconds off air
+5. `AF0FR AF0FR` in Morse, then idle for 15 seconds off air
 
-Change `STATION_ID` in `src/config.h` to the station actually operating the
-transmitter. All timing, tone, GPIO, and PTT polarity settings are in that file.
+Firmware defaults are in `src/config.h`. Tone, timing, station ID, and output
+gain can be adjusted from the web page while the unit is running.
+
+## Web setup
+
+1. Power the PicoFox and wait a few seconds.
+2. On a phone, join the `PicoFox` Wi-Fi network with password `picofox1`.
+3. Ignore any "no internet" warning and remain connected.
+4. Open `http://picofox/` in a browser. If the phone does not use the PicoFox
+   DNS server, use `http://192.168.4.1` as a fallback.
+5. Adjust the settings and select **Apply settings**.
+
+The Dashboard page contains live start/stop controls, the active sequence
+step, and a visual outline of the complete fox workflow. It updates once per
+second without reloading the page. Configuration is kept on a separate
+Settings page; both pages have navigation links at the top.
+
+The page controls the station ID, CW speed and frequency, output gain, warble,
+sweep, off-air intervals, and whether the USB power-bank dummy load is active.
+Disabling it turns GP18 off immediately. Changes apply at the next appropriate
+sequence stage and are saved to flash during the next off-air pause. They are restored
+after power cycles. The defaults in `config.h` are used when no valid saved
+record exists, including on the first boot. Change `WIFI_AP_SSID` and
+`WIFI_AP_PASSWORD` in `config.h` before building if different access-point
+credentials are desired.
+
+PicoFox runs a local DNS responder that directs hostnames such as `picofox` to
+its settings server. This works only while connected to the PicoFox Wi-Fi
+network and does not require internet access.
+
+**Stop transmitting** interrupts the current tone or CW message, transmits the
+configured station ID once in CW, and then prevents further fox stages while
+leaving Wi-Fi and the power-bank keep-alive operational. **Start transmitting**
+resumes the sequence. The state is persistent. Pressing the
+Pico 2 W BOOTSEL button toggles the same start/stop state; its input is sampled
+and debounced using Raspberry Pi's flash-safe BOOTSEL technique.
+
+The web page provides a two-step inline reboot control. It uses no browser
+popup and does not navigate away from the settings page. A reboot request waits
+for the next off-air boundary, saves pending settings, allows time for the
+inline status message to update, transmits the configured station ID once
+in CW, and then restarts the Pico 2 W.
+
+The access-point name and password can also be changed on the web page. This
+makes it practical to deploy units such as `PicoFox1` and `PicoFox2`. A blank
+password field preserves the existing password. Wi-Fi changes are saved with
+the other settings but take effect after reboot, since restarting the access
+point immediately would interrupt the response to the phone.
+
+Settings occupy the final 4 KB flash sector and include a format version and
+checksum. Firmware refuses to save if its linked image ever grows into that
+sector. Reflashing only the UF2 normally leaves the saved record intact; a full
+flash erase restores the `config.h` defaults.
+
+Pause values may be set as low as zero. Pauses shorter than 500 ms silence the
+audio but keep PTT asserted, avoiding a brief release/re-key cycle. Pauses of
+500 ms or longer release PTT and are genuinely off-air. The threshold is
+`PTT_RELEASE_PAUSE_MS` in `config.h`; the existing 150 ms PTT lead and 100 ms
+tail apply only when PTT actually changes state.
 
 ## Connections
 
 | Pico | Function | Interface requirement |
 |---|---|---|
 | GP15 | PTT | Drive a 2N3904 or optocoupler interface; do not connect an unknown radio PTT voltage directly |
-| GP16 | Audio | Feed the mic input through DC blocking, attenuation, and level adjustment |
+| GP16 | Audio | Feed the mic input through DC blocking and a fixed attenuation network |
 | GP18 | Power-bank keep-alive | Drive the gate of an external logic-level N-channel MOSFET |
 | GND | Common | Connect only when the chosen radio interface uses a common ground |
 | LED | TX indicator | On while PTT is asserted |
 
-The GP16 PWM signal is 3.3 V logic-level square wave, not mic-level audio.
-Start with strong attenuation and increase the level only until deviation is
-clean. A simple starting interface is a 1 uF coupling capacitor followed by a
-10 kOhm series resistor and a 1 kOhm trimmer to ground, with the trimmer wiper
-feeding the mic input. Verify the requirements for your particular radio first.
+The GP16 PWM signal is 3.3 V logic-level square wave, not mic-level audio. The
+web gain setting does not make a direct GPIO-to-microphone connection safe. Use
+a fixed DC-blocking and attenuation network sized for the radio's mic input.
+A conservative starting point is a 1 uF coupling capacitor, 100 kOhm series
+resistor, and 1 kOhm resistor from the radio-side signal to ground (about 100:1
+maximum attenuation). Verify the input circuit for the particular radio and
+measure deviation into a dummy load before reducing attenuation. No physical
+gain potentiometer is required.
 
 Use a transistor or optocoupler for PTT. With the common 2N3904 low-side PTT
 circuit, GP15 drives the base through roughly 4.7 kOhm, the emitter goes to
@@ -63,17 +124,19 @@ ohms wastes less energy but may not meet the bank's detection threshold.
 
 ## Build
 
-Install the ARM GNU toolchain, CMake, Ninja (or Make), and the Raspberry Pi Pico
-SDK. Initialize the SDK submodules, then either set `PICO_SDK_PATH` or place the
-SDK in a `pico-sdk` directory beside this README.
+Install Git, the ARM GNU toolchain, CMake, Ninja (or Make), and a current
+Raspberry Pi Pico SDK with RP2350/Pico 2 W support. Initialize the SDK
+submodules, then either set `PICO_SDK_PATH` or place the SDK in a `pico-sdk`
+directory beside this README. The first configuration also downloads the
+official `pico-examples` sources used for its DHCP server.
 
 ```powershell
-cmake -S . -B build -G Ninja -DPICO_BOARD=pico
+cmake -S . -B build -G Ninja -DPICO_BOARD=pico2_w
 cmake --build build
 ```
 
-Hold BOOTSEL while connecting the Pico, then copy `build/PicoFox.uf2` to the
-`RPI-RP2` drive. For a Pico W, configure with `-DPICO_BOARD=pico_w` instead.
+Hold BOOTSEL while connecting the Pico 2 W, then copy `build/PicoFox.uf2` to
+the USB mass-storage drive.
 
 ## On-air use
 
