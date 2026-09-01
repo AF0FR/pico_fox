@@ -95,33 +95,9 @@ static bool valid_wifi_ssid(const char *text)
     return length > 0u && length <= WIFI_SSID_MAX_LENGTH;
 }
 
-static bool valid(const fox_settings_t *s)
+void settings_get_defaults(fox_settings_t *destination)
 {
-    return valid_station_id(s->station_id) &&
-           valid_wifi_ssid(s->wifi_ssid) &&
-           valid_wifi_text(s->wifi_password, 8u, WIFI_PASSWORD_MAX_LENGTH) &&
-           s->keep_alive_enabled <= 1u &&
-           s->transmit_enabled <= 1u &&
-           s->cw_wpm >= 5 && s->cw_wpm <= 40 &&
-           s->cw_tone_hz >= 200 && s->cw_tone_hz <= 2000 &&
-           s->audio_gain_percent >= 5 && s->audio_gain_percent <= 100 &&
-           s->warble_low_hz >= 200 && s->warble_low_hz < s->warble_high_hz &&
-           s->warble_high_hz <= 2500 &&
-           s->warble_switch_ms >= 50 && s->warble_switch_ms <= 1000 &&
-           s->warble_duration_ms >= 500 && s->warble_duration_ms <= 30000 &&
-           s->sweep_low_hz >= 200 && s->sweep_low_hz < s->sweep_high_hz &&
-           s->sweep_high_hz <= 2500 &&
-           s->sweep_step_hz >= 1 && s->sweep_step_hz <= 200 &&
-           s->sweep_step_ms >= 5 && s->sweep_step_ms <= 500 &&
-           s->sweep_duration_ms >= 500 && s->sweep_duration_ms <= 30000 &&
-           s->fox_pause_ms <= 30000 && s->tone_pause_ms <= 60000 &&
-           s->idle_ms <= 60000;
-}
-
-void settings_init(void)
-{
-    critical_section_init(&settings_lock);
-    current_settings = (fox_settings_t) {
+    *destination = (fox_settings_t) {
         .station_id = STATION_ID,
         .wifi_ssid = WIFI_AP_SSID,
         .wifi_password = WIFI_AP_PASSWORD,
@@ -143,6 +119,58 @@ void settings_init(void)
         .tone_pause_ms = TONE_PAUSE_MS,
         .idle_ms = IDLE_DURATION_MS,
     };
+}
+
+settings_validation_t settings_validate(const fox_settings_t *s)
+{
+    if (!valid_station_id(s->station_id)) return SETTINGS_ERROR_STATION_ID;
+    if (!valid_wifi_ssid(s->wifi_ssid)) return SETTINGS_ERROR_WIFI_SSID;
+    if (!valid_wifi_text(s->wifi_password, 8u, WIFI_PASSWORD_MAX_LENGTH)) return SETTINGS_ERROR_WIFI_PASSWORD;
+    if (s->keep_alive_enabled > 1u || s->transmit_enabled > 1u) return SETTINGS_ERROR_FLAGS;
+    if (s->cw_wpm < 5 || s->cw_wpm > 40) return SETTINGS_ERROR_CW_WPM;
+    if (s->cw_tone_hz < 200 || s->cw_tone_hz > 2000) return SETTINGS_ERROR_CW_TONE;
+    if (s->audio_gain_percent < 5 || s->audio_gain_percent > 100) return SETTINGS_ERROR_GAIN;
+    if (s->warble_low_hz < 200 || s->warble_low_hz >= s->warble_high_hz || s->warble_high_hz > 2500) return SETTINGS_ERROR_WARBLE_RANGE;
+    if (s->warble_switch_ms < 50 || s->warble_switch_ms > 1000) return SETTINGS_ERROR_WARBLE_SWITCH;
+    if (s->warble_duration_ms < 500 || s->warble_duration_ms > 30000) return SETTINGS_ERROR_WARBLE_DURATION;
+    if (s->sweep_low_hz < 200 || s->sweep_low_hz >= s->sweep_high_hz || s->sweep_high_hz > 2500) return SETTINGS_ERROR_SWEEP_RANGE;
+    if (s->sweep_step_hz < 1 || s->sweep_step_hz > 200) return SETTINGS_ERROR_SWEEP_STEP;
+    if (s->sweep_step_ms < 5 || s->sweep_step_ms > 500) return SETTINGS_ERROR_SWEEP_STEP_TIME;
+    if (s->sweep_duration_ms < 500 || s->sweep_duration_ms > 30000) return SETTINGS_ERROR_SWEEP_DURATION;
+    if (s->fox_pause_ms > 30000) return SETTINGS_ERROR_FOX_PAUSE;
+    if (s->tone_pause_ms > 60000) return SETTINGS_ERROR_TONE_PAUSE;
+    if (s->idle_ms > 60000) return SETTINGS_ERROR_IDLE;
+    return SETTINGS_VALID;
+}
+
+const char *settings_validation_message(settings_validation_t result)
+{
+    switch (result) {
+    case SETTINGS_VALID: return "Settings applied and queued for flash storage.";
+    case SETTINGS_ERROR_STATION_ID: return "Station ID must contain 1-15 uppercase letters, digits, or slash characters.";
+    case SETTINGS_ERROR_WIFI_SSID: return "Network name contains an unsupported character or is longer than 32 characters.";
+    case SETTINGS_ERROR_WIFI_PASSWORD: return "Wi-Fi password must contain 8-63 printable characters.";
+    case SETTINGS_ERROR_CW_WPM: return "CW speed must be between 5 and 40 WPM.";
+    case SETTINGS_ERROR_CW_TONE: return "CW tone must be between 200 and 2000 Hz.";
+    case SETTINGS_ERROR_GAIN: return "Output gain must be between 5 and 100 percent.";
+    case SETTINGS_ERROR_WARBLE_RANGE: return "Warble low frequency must be below high frequency; both must be between 200 and 2500 Hz.";
+    case SETTINGS_ERROR_WARBLE_SWITCH: return "Warble switch time must be between 50 and 1000 ms.";
+    case SETTINGS_ERROR_WARBLE_DURATION: return "Warble duration must be between 500 and 30000 ms.";
+    case SETTINGS_ERROR_SWEEP_RANGE: return "Sweep low frequency must be below high frequency; both must be between 200 and 2500 Hz.";
+    case SETTINGS_ERROR_SWEEP_STEP: return "Sweep step must be between 1 and 200 Hz.";
+    case SETTINGS_ERROR_SWEEP_STEP_TIME: return "Sweep step time must be between 5 and 500 ms.";
+    case SETTINGS_ERROR_SWEEP_DURATION: return "Sweep duration must be between 500 and 30000 ms.";
+    case SETTINGS_ERROR_FOX_PAUSE: return "Fox pause must be between 0 and 30000 ms.";
+    case SETTINGS_ERROR_TONE_PAUSE: return "Tone pause must be between 0 and 60000 ms.";
+    case SETTINGS_ERROR_IDLE: return "Idle time must be between 0 and 60000 ms.";
+    default: return "One or more settings are invalid.";
+    }
+}
+
+void settings_init(void)
+{
+    critical_section_init(&settings_lock);
+    settings_get_defaults(&current_settings);
     settings_dirty = false;
 
     const settings_record_t *saved =
@@ -151,7 +179,7 @@ void settings_init(void)
         saved->version == SETTINGS_VERSION &&
         saved->payload_size == sizeof(saved->payload) &&
         saved->checksum == checksum_bytes(&saved->payload, sizeof(saved->payload)) &&
-        valid(&saved->payload)) {
+        settings_validate(&saved->payload) == SETTINGS_VALID) {
         current_settings = saved->payload;
     }
 }
@@ -165,7 +193,7 @@ void settings_get(fox_settings_t *destination)
 
 bool settings_set(const fox_settings_t *candidate)
 {
-    if (!valid(candidate)) {
+    if (settings_validate(candidate) != SETTINGS_VALID) {
         return false;
     }
     critical_section_enter_blocking(&settings_lock);
@@ -175,6 +203,21 @@ bool settings_set(const fox_settings_t *candidate)
     }
     critical_section_exit(&settings_lock);
     return true;
+}
+
+void settings_restore_defaults(void)
+{
+    fox_settings_t defaults;
+    settings_get_defaults(&defaults);
+
+    critical_section_enter_blocking(&settings_lock);
+    // Restoring configuration must never start a station that the operator stopped.
+    defaults.transmit_enabled = current_settings.transmit_enabled;
+    if (memcmp(&current_settings, &defaults, sizeof(defaults)) != 0) {
+        current_settings = defaults;
+        settings_dirty = true;
+    }
+    critical_section_exit(&settings_lock);
 }
 
 static void write_flash(void *parameter)

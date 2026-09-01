@@ -34,6 +34,7 @@ add_executable(PicoFox
     src/settings.c
     src/station_control.c
     src/web.c
+    src/web_settings.c
     src/workflow.c
     ${pico_examples_SOURCE_DIR}/pico_w/wifi/access_point/dhcpserver/dhcpserver.c
     ${pico_examples_SOURCE_DIR}/pico_w/wifi/access_point/dnsserver/dnsserver.c
@@ -61,10 +62,11 @@ pico_configure_ip4_address(PicoFox PRIVATE CYW43_DEFAULT_IP_AP_ADDRESS 192.168.4
 
 pico_add_library(PicoFoxWebContent NOFLAG)
 pico_set_lwip_httpd_content(PicoFoxWebContent INTERFACE
-    web/index.shtml
-    web/reboot.shtml
-    web/settings.shtml
-    web/status.shtml
+    ${CMAKE_CURRENT_LIST_DIR}/web/picofox.css
+    ${CMAKE_CURRENT_LIST_DIR}/web/index.shtml
+    ${CMAKE_CURRENT_LIST_DIR}/web/reboot.shtml
+    ${CMAKE_CURRENT_LIST_DIR}/web/settings.shtml
+    ${CMAKE_CURRENT_LIST_DIR}/web/status.shtml
 )
 target_link_libraries(PicoFox PRIVATE PicoFoxWebContent)
 

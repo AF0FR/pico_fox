@@ -18,6 +18,7 @@
 #define LWIP_HTTPD_SSI                  1
 #define LWIP_HTTPD_SSI_INCLUDE_TAG      0
 #define LWIP_HTTPD_MAX_CGI_PARAMETERS   20
+#define LWIP_HTTPD_SUPPORT_POST          1
 #define HTTPD_FSDATA_FILE               "pico_fsdata.inc"
 #define LWIP_CHKSUM_ALGORITHM           3
 #define LWIP_NETIF_HOSTNAME             1

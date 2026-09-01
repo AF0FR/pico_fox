@@ -30,9 +30,34 @@ typedef struct {
     uint16_t idle_ms;
 } fox_settings_t;
 
+typedef enum {
+    SETTINGS_VALID = 0,
+    SETTINGS_ERROR_STATION_ID,
+    SETTINGS_ERROR_WIFI_SSID,
+    SETTINGS_ERROR_WIFI_PASSWORD,
+    SETTINGS_ERROR_FLAGS,
+    SETTINGS_ERROR_CW_WPM,
+    SETTINGS_ERROR_CW_TONE,
+    SETTINGS_ERROR_GAIN,
+    SETTINGS_ERROR_WARBLE_RANGE,
+    SETTINGS_ERROR_WARBLE_SWITCH,
+    SETTINGS_ERROR_WARBLE_DURATION,
+    SETTINGS_ERROR_SWEEP_RANGE,
+    SETTINGS_ERROR_SWEEP_STEP,
+    SETTINGS_ERROR_SWEEP_STEP_TIME,
+    SETTINGS_ERROR_SWEEP_DURATION,
+    SETTINGS_ERROR_FOX_PAUSE,
+    SETTINGS_ERROR_TONE_PAUSE,
+    SETTINGS_ERROR_IDLE,
+} settings_validation_t;
+
 void settings_init(void);
 void settings_get(fox_settings_t *destination);
+void settings_get_defaults(fox_settings_t *destination);
+settings_validation_t settings_validate(const fox_settings_t *candidate);
+const char *settings_validation_message(settings_validation_t result);
 bool settings_set(const fox_settings_t *candidate);
+void settings_restore_defaults(void);
 
 // Writes a pending web update to flash. Call only from the main execution
 // context, preferably while PTT is off. Returns true if nothing is pending or

@@ -1,8 +1,6 @@
 #include "web.h"
 
-#include <ctype.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "dhcpserver.h"
@@ -12,25 +10,14 @@
 #include "pico/cyw43_arch.h"
 
 #include "config.h"
-#include "keep_alive.h"
 #include "settings.h"
 #include "station_control.h"
+#include "web_settings.h"
 #include "workflow.h"
 
 static dhcp_server_t dhcp_server;
 static dns_server_t dns_server;
 static volatile bool reboot_requested;
-
-static void copy_text(char *destination, size_t destination_size,
-                      const char *source, bool uppercase)
-{
-    size_t i = 0;
-    for (; source[i] != '\0' && i + 1u < destination_size; ++i) {
-        destination[i] = uppercase ?
-            (char)toupper((unsigned char)source[i]) : source[i];
-    }
-    destination[i] = '\0';
-}
 
 static const char *parameter_value(int count, char *names[], char *values[],
                                    const char *wanted)
@@ -43,71 +30,13 @@ static const char *parameter_value(int count, char *names[], char *values[],
     return NULL;
 }
 
-static void update_u16(uint16_t *field, const char *name, int count,
-                       char *names[], char *values[])
-{
-    const char *value = parameter_value(count, names, values, name);
-    if (value != NULL) {
-        *field = (uint16_t)strtoul(value, NULL, 10);
-    }
-}
-
-static const char *save_handler(int index, int count, char *names[], char *values[])
-{
-    (void)index;
-    fox_settings_t settings;
-    settings_get(&settings);
-
-    const char *station_id = parameter_value(count, names, values, "id");
-    if (station_id != NULL) {
-        copy_text(settings.station_id, sizeof(settings.station_id), station_id, true);
-    }
-
-    const char *ssid = parameter_value(count, names, values, "ssid");
-    if (ssid != NULL) {
-        copy_text(settings.wifi_ssid, sizeof(settings.wifi_ssid), ssid, false);
-    }
-    const char *password = parameter_value(count, names, values, "password");
-    if (password != NULL && password[0] != '\0') {
-        copy_text(settings.wifi_password, sizeof(settings.wifi_password), password, false);
-    }
-
-    if (parameter_value(count, names, values, "kap") != NULL) {
-        settings.keep_alive_enabled =
-            parameter_value(count, names, values, "ka") != NULL;
-    }
-
-    update_u16(&settings.cw_wpm, "wpm", count, names, values);
-    update_u16(&settings.cw_tone_hz, "cw", count, names, values);
-    uint16_t gain = settings.audio_gain_percent;
-    update_u16(&gain, "gain", count, names, values);
-    settings.audio_gain_percent = gain <= UINT8_MAX ? (uint8_t)gain : UINT8_MAX;
-    update_u16(&settings.warble_low_hz, "wl", count, names, values);
-    update_u16(&settings.warble_high_hz, "wh", count, names, values);
-    update_u16(&settings.warble_switch_ms, "ws", count, names, values);
-    update_u16(&settings.warble_duration_ms, "wd", count, names, values);
-    update_u16(&settings.sweep_low_hz, "sl", count, names, values);
-    update_u16(&settings.sweep_high_hz, "sh", count, names, values);
-    update_u16(&settings.sweep_step_hz, "ss", count, names, values);
-    update_u16(&settings.sweep_step_ms, "sm", count, names, values);
-    update_u16(&settings.sweep_duration_ms, "sd", count, names, values);
-    update_u16(&settings.fox_pause_ms, "fp", count, names, values);
-    update_u16(&settings.tone_pause_ms, "tp", count, names, values);
-    update_u16(&settings.idle_ms, "idle", count, names, values);
-
-    if (!settings_set(&settings)) {
-        return "/settings.shtml?error=1";
-    }
-    keep_alive_set_enabled(settings.keep_alive_enabled != 0u);
-    return "/settings.shtml?saved=1";
-}
-
 static const char *reboot_handler(int index, int count, char *names[], char *values[])
 {
     (void)index;
-    (void)count;
-    (void)names;
-    (void)values;
+    const char *request = parameter_value(count, names, values, "request");
+    if (request == NULL || strcmp(request, "1") != 0) {
+        return "/settings.shtml?reboot=invalid";
+    }
     reboot_requested = true;
     return "/reboot.shtml";
 }
@@ -127,21 +56,25 @@ static const char *station_handler(int index, int count, char *names[], char *va
 }
 
 static const tCGI cgi_handlers[] = {
-    {"/save.cgi", save_handler},
     {"/reboot.cgi", reboot_handler},
     {"/station.cgi", station_handler},
+    {"/defaults.cgi", web_settings_defaults_handler},
 };
 
 static const char *ssi_tags[] = {
     "id", "wpm", "cw", "gain", "wl", "wh", "ws", "wd",
     "sl", "sh", "ss", "sm", "sd", "fp", "tp", "idle", "ssid", "kacheck",
-    "txstatus", "startdis", "stopdis", "step", "stepid"
+    "txstatus", "startdis", "stopdis", "step", "stepid", "savecls", "savemsg",
+    "did", "dssid", "dpass", "dka", "dwpm", "dcw", "dgain", "dwl", "dwh",
+    "dws", "dwd", "dsl", "dsh", "dss", "dsm", "dsd", "dfp", "dtp", "didle"
 };
 
 static u16_t ssi_handler(int index, char *output, int output_length)
 {
     fox_settings_t s;
+    fox_settings_t d;
     settings_get(&s);
+    settings_get_defaults(&d);
 
     switch (index) {
         case 0: return (u16_t)snprintf(output, output_length, "%s", s.station_id);
@@ -175,6 +108,29 @@ static u16_t ssi_handler(int index, char *output, int output_length)
                                         workflow_name(workflow_get()));
         case 22: return (u16_t)snprintf(output, output_length, "%u",
                                         (unsigned)workflow_get());
+        case 23: return (u16_t)snprintf(output, output_length, "%s",
+                                        web_settings_save_class());
+        case 24: return (u16_t)snprintf(output, output_length, "%s",
+                                        web_settings_save_message());
+        case 25: return (u16_t)snprintf(output, output_length, "%s", d.station_id);
+        case 26: return (u16_t)snprintf(output, output_length, "%s", d.wifi_ssid);
+        case 27: return (u16_t)snprintf(output, output_length, "%s", d.wifi_password);
+        case 28: return (u16_t)snprintf(output, output_length, "%s", d.keep_alive_enabled ? "enabled" : "disabled");
+        case 29: return (u16_t)snprintf(output, output_length, "%u", d.cw_wpm);
+        case 30: return (u16_t)snprintf(output, output_length, "%u", d.cw_tone_hz);
+        case 31: return (u16_t)snprintf(output, output_length, "%u", d.audio_gain_percent);
+        case 32: return (u16_t)snprintf(output, output_length, "%u", d.warble_low_hz);
+        case 33: return (u16_t)snprintf(output, output_length, "%u", d.warble_high_hz);
+        case 34: return (u16_t)snprintf(output, output_length, "%u", d.warble_switch_ms);
+        case 35: return (u16_t)snprintf(output, output_length, "%u", d.warble_duration_ms);
+        case 36: return (u16_t)snprintf(output, output_length, "%u", d.sweep_low_hz);
+        case 37: return (u16_t)snprintf(output, output_length, "%u", d.sweep_high_hz);
+        case 38: return (u16_t)snprintf(output, output_length, "%u", d.sweep_step_hz);
+        case 39: return (u16_t)snprintf(output, output_length, "%u", d.sweep_step_ms);
+        case 40: return (u16_t)snprintf(output, output_length, "%u", d.sweep_duration_ms);
+        case 41: return (u16_t)snprintf(output, output_length, "%u", d.fox_pause_ms);
+        case 42: return (u16_t)snprintf(output, output_length, "%u", d.tone_pause_ms);
+        case 43: return (u16_t)snprintf(output, output_length, "%u", d.idle_ms);
         default: return 0;
     }
 }
