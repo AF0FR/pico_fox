@@ -13,6 +13,10 @@ typedef struct {
     char wifi_password[WIFI_PASSWORD_MAX_LENGTH + 1u];
     uint8_t keep_alive_enabled;
     uint8_t transmit_enabled;
+    uint8_t operating_mode;
+    uint8_t keyer_mode;
+    uint8_t keyer_reversed;
+    uint16_t keyer_hang_ms;
     uint16_t cw_wpm;
     uint16_t cw_tone_hz;
     uint8_t audio_gain_percent;
@@ -36,6 +40,9 @@ typedef enum {
     SETTINGS_ERROR_WIFI_SSID,
     SETTINGS_ERROR_WIFI_PASSWORD,
     SETTINGS_ERROR_FLAGS,
+    SETTINGS_ERROR_MODE,
+    SETTINGS_ERROR_KEYER_MODE,
+    SETTINGS_ERROR_KEYER_HANG,
     SETTINGS_ERROR_CW_WPM,
     SETTINGS_ERROR_CW_TONE,
     SETTINGS_ERROR_GAIN,

@@ -5,6 +5,11 @@
 #define LWIP_NETCONN                    0
 #define LWIP_DHCP                       1
 #define LWIP_DNS                        1
+#define LWIP_MDNS_RESPONDER             1
+#define LWIP_IGMP                       1
+#define LWIP_NUM_NETIF_CLIENT_DATA      1
+#define MDNS_RESP_USENETIF_EXTCALLBACK  1
+#define MEMP_NUM_SYS_TIMEOUT            (LWIP_NUM_SYS_TIMEOUT_INTERNAL + 3)
 #define LWIP_TCP                        1
 #define MEM_ALIGNMENT                   4
 #define MEM_SIZE                        16000
@@ -17,7 +22,8 @@
 #define LWIP_HTTPD_CGI                  1
 #define LWIP_HTTPD_SSI                  1
 #define LWIP_HTTPD_SSI_INCLUDE_TAG      0
-#define LWIP_HTTPD_MAX_CGI_PARAMETERS   20
+#define LWIP_HTTPD_MAX_CGI_PARAMETERS   32
+#define LWIP_HTTPD_MAX_REQUEST_URI_LEN  768
 #define LWIP_HTTPD_SUPPORT_POST          1
 #define HTTPD_FSDATA_FILE               "pico_fsdata.inc"
 #define LWIP_CHKSUM_ALGORITHM           3

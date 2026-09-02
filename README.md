@@ -1,10 +1,16 @@
 # PicoFox
 
 PicoFox is a Raspberry Pi Pico 2 W audio fox controller for an FM radio. It
-keys PTT on GP15 and generates adjustable PWM tone audio on GP16. The Pico 2 W
+keys PTT on GP0 and generates adjustable PWM tone audio on GP1. The Pico 2 W
 also hosts its own Wi-Fi access point and phone-friendly configuration page.
 
-It also pulses an external dummy load through a MOSFET on GP18 for USB power
+The firmware has two selectable operating modes. **PicoFox** runs the
+automatic transmitter sequence described below. **PicoCW** is a manual MCW
+keyer using GP2 and GP3 for a straight key or DIT/DAH paddles. The repository
+and firmware artifact retain the PicoFox name until the planned PicoTone
+project rename.
+
+It also pulses an external dummy load through a switch on GP4 for USB power
 banks that shut down when the Pico's current draw is too low. By default the
 load is enabled for 1 second every 5 seconds, independently of the fox cycle.
 
@@ -24,35 +30,45 @@ gain can be adjusted from the web page while the unit is running.
 1. Power the PicoFox and wait a few seconds.
 2. On a phone, join the `PicoFox` Wi-Fi network with password `picofox1`.
 3. Ignore any "no internet" warning and remain connected.
-4. Open `http://picofox/` in a browser. If the phone does not use the PicoFox
-   DNS server, use `http://192.168.4.1` as a fallback.
+4. Open `http://picofox.local/` in a browser. If the device does not support
+   mDNS, use `http://192.168.4.1` as a fallback.
 5. Adjust the settings and select **Apply settings**.
 
-The Dashboard page contains live start/stop controls, the active sequence
-step, and a visual outline of the complete fox workflow. It updates once per
-second without reloading the page. Configuration is kept on a separate
-Settings page; both pages have navigation links at the top.
+The Dashboard has PicoFox and PicoCW feature buttons. PicoFox shows the live
+sequence, Start/Stop controls, and a muted-by-default browser monitor. PicoCW
+shows a single straight-key control or separate DIT/DAH controls according to
+the selected key type; holding a web control operates the same MCW keyer as
+the physical inputs. A header menu links the Dashboard, PicoFox settings, and
+PicoCW settings pages.
 
 The page controls the station ID, CW speed and frequency, output gain, warble,
 sweep, off-air intervals, and whether the USB power-bank dummy load is active.
-Disabling it turns GP18 off immediately. Changes apply at the next appropriate
+Disabling it turns GP4 off immediately. Changes apply at the next appropriate
 sequence stage and are saved to flash during the next off-air pause. They are restored
 after power cycles. The defaults in `config.h` are used when no valid saved
 record exists, including on the first boot. Change `WIFI_AP_SSID` and
 `WIFI_AP_PASSWORD` in `config.h` before building if different access-point
 credentials are desired.
 
-Settings are submitted with HTTP POST, keeping a replacement Wi-Fi password
-out of the request URL and browser history. The page reports whether an apply
-succeeded, identifies the invalid field when validation fails, and shows an
+PicoCW supports a straight key, iambic Mode A, and iambic Mode B. Paddle
+polarity can be reversed in software. Both key inputs use internal pull-ups
+and are active when shorted to ground. In straight-key mode either input may
+be used. The configured PTT hang time keeps the radio keyed briefly between
+elements or words, while the existing PTT lead time protects the beginning of
+the first transmitted element.
+
+Settings are submitted through the local CGI settings endpoint. The page
+reports whether an apply succeeded, identifies the invalid field when
+validation fails, and shows an
 inline warning if the operator tries to navigate away with unapplied edits.
 Factory-default labels are generated from the same `config.h` values used by
 the firmware. The two-step **Restore factory defaults** control writes those
 values back to persistent settings while preserving a stopped transmitter.
 
-PicoFox runs a local DNS responder that directs hostnames such as `picofox` to
-its settings server. This works only while connected to the PicoFox Wi-Fi
-network and does not require internet access.
+PicoFox advertises `picofox.local` over mDNS and runs a local DNS responder
+that directs ordinary hostnames such as `picofox` to its settings server.
+These work only while connected to the PicoFox Wi-Fi network and do not
+require internet access.
 
 **Stop transmitting** interrupts the current tone or CW message, transmits the
 configured station ID once in CW, and then prevents further fox stages while
@@ -93,13 +109,15 @@ the complete wiring diagram and component connections.
 
 | Pico | Function | Interface requirement |
 |---|---|---|
-| GP15 | PTT | Drive a 2N3904 or optocoupler interface; do not connect an unknown radio PTT voltage directly |
-| GP16 | Audio | Feed the mic input through DC blocking and a fixed attenuation network |
-| GP18 | Power-bank keep-alive | Drive the gate of an external logic-level N-channel MOSFET |
+| GP0 | PTT | Drive a 2N3904 or optocoupler interface; do not connect an unknown radio PTT voltage directly |
+| GP1 | Audio | Feed the mic input through DC blocking and a fixed attenuation network |
+| GP2 | DIT key | Reserved for a future external paddle input |
+| GP3 | DAH key | Reserved for a future external paddle input |
+| GP4 | Power-bank keep-alive | Drive the external dummy-load switch; do not drive the load directly |
 | GND | Common | Connect only when the chosen radio interface uses a common ground |
 | LED | TX indicator | On while PTT is asserted |
 
-The GP16 PWM signal is 3.3 V logic-level square wave, not mic-level audio. The
+The GP1 PWM signal is 3.3 V logic-level square wave, not mic-level audio. The
 web gain setting does not make a direct GPIO-to-microphone connection safe. Use
 a fixed DC-blocking and attenuation network sized for the radio's mic input.
 A conservative starting point is a 1 uF coupling capacitor, 100 kOhm series
@@ -109,18 +127,18 @@ measure deviation into a dummy load before reducing attenuation. No physical
 gain potentiometer is required.
 
 Use a transistor or optocoupler for PTT. With the common 2N3904 low-side PTT
-circuit, GP15 drives the base through roughly 4.7 kOhm, the emitter goes to
+circuit, GP0 drives the base through a current-limiting resistor, the emitter goes to
 ground, and the collector goes to the radio's PTT line. `PTT_ACTIVE_LEVEL` then
 remains `1`.
 
 ### USB power-bank keep-alive
 
-Do not connect a dummy-load resistor to GP18. GP18 only controls a MOSFET:
+Do not connect a dummy-load resistor to GP4. GP4 only controls the switch:
 
 ```text
 USB 5 V ---- 68 ohm, 1 W resistor ---- Drain  N-MOSFET
                                            Source ---- GND
-GP18 -------- 100 ohm -------------------- Gate
+GP4 --------- 100 ohm -------------------- Gate
                                            Gate ---- 100 kohm ---- GND
 ```
 

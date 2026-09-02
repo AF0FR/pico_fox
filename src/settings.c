@@ -15,7 +15,7 @@ static fox_settings_t current_settings;
 static bool settings_dirty;
 
 #define SETTINGS_MAGIC   0x50465832u  // "PFX2"
-#define SETTINGS_VERSION 5u
+#define SETTINGS_VERSION 6u
 #define SETTINGS_FLASH_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
 
 typedef struct {
@@ -103,6 +103,10 @@ void settings_get_defaults(fox_settings_t *destination)
         .wifi_password = WIFI_AP_PASSWORD,
         .keep_alive_enabled = KEEP_ALIVE_ENABLED,
         .transmit_enabled = 1u,
+        .operating_mode = OPERATING_MODE_DEFAULT,
+        .keyer_mode = KEYER_MODE_DEFAULT,
+        .keyer_reversed = KEYER_REVERSED_DEFAULT,
+        .keyer_hang_ms = KEYER_HANG_MS_DEFAULT,
         .cw_wpm = CW_WPM,
         .cw_tone_hz = CW_TONE_HZ,
         .audio_gain_percent = AUDIO_GAIN_PERCENT,
@@ -127,6 +131,9 @@ settings_validation_t settings_validate(const fox_settings_t *s)
     if (!valid_wifi_ssid(s->wifi_ssid)) return SETTINGS_ERROR_WIFI_SSID;
     if (!valid_wifi_text(s->wifi_password, 8u, WIFI_PASSWORD_MAX_LENGTH)) return SETTINGS_ERROR_WIFI_PASSWORD;
     if (s->keep_alive_enabled > 1u || s->transmit_enabled > 1u) return SETTINGS_ERROR_FLAGS;
+    if (s->operating_mode > 1u) return SETTINGS_ERROR_MODE;
+    if (s->keyer_mode > 2u || s->keyer_reversed > 1u) return SETTINGS_ERROR_KEYER_MODE;
+    if (s->keyer_hang_ms > 5000u) return SETTINGS_ERROR_KEYER_HANG;
     if (s->cw_wpm < 5 || s->cw_wpm > 40) return SETTINGS_ERROR_CW_WPM;
     if (s->cw_tone_hz < 200 || s->cw_tone_hz > 2000) return SETTINGS_ERROR_CW_TONE;
     if (s->audio_gain_percent < 5 || s->audio_gain_percent > 100) return SETTINGS_ERROR_GAIN;
@@ -150,6 +157,9 @@ const char *settings_validation_message(settings_validation_t result)
     case SETTINGS_ERROR_STATION_ID: return "Station ID must contain 1-15 uppercase letters, digits, or slash characters.";
     case SETTINGS_ERROR_WIFI_SSID: return "Network name contains an unsupported character or is longer than 32 characters.";
     case SETTINGS_ERROR_WIFI_PASSWORD: return "Wi-Fi password must contain 8-63 printable characters.";
+    case SETTINGS_ERROR_MODE: return "Operating mode must be PicoFox or PicoCW.";
+    case SETTINGS_ERROR_KEYER_MODE: return "Key input must be Straight, Iambic A, or Iambic B.";
+    case SETTINGS_ERROR_KEYER_HANG: return "PTT hang time must be between 0 and 5000 ms.";
     case SETTINGS_ERROR_CW_WPM: return "CW speed must be between 5 and 40 WPM.";
     case SETTINGS_ERROR_CW_TONE: return "CW tone must be between 200 and 2000 Hz.";
     case SETTINGS_ERROR_GAIN: return "Output gain must be between 5 and 100 percent.";

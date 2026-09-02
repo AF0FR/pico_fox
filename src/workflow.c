@@ -28,6 +28,8 @@ const char *workflow_name(workflow_step_t step)
         "Idle",
         "Stop identification",
         "Reboot identification",
+        "PicoCW ready",
+        "PicoCW key down",
     };
     return (unsigned)step < (sizeof(names) / sizeof(names[0])) ?
         names[step] : "Unknown";

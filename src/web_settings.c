@@ -51,6 +51,9 @@ static void update_u16(uint16_t *field, const char *name, int count,
 
 static const char *save_handler(int count, char *names[], char *values[])
 {
+    const char *return_page = parameter_value(count, names, values, "return");
+    const char *complete_page = return_page != NULL && strcmp(return_page, "cw") == 0 ?
+        "/cw-apply-complete.html" : "/apply-complete.html";
     fox_settings_t settings;
     settings_get(&settings);
 
@@ -70,6 +73,14 @@ static const char *save_handler(int count, char *names[], char *values[])
         settings.keep_alive_enabled =
             parameter_value(count, names, values, "ka") != NULL;
     }
+    const char *mode = parameter_value(count, names, values, "mode");
+    if (mode != NULL) settings.operating_mode = (uint8_t)strtoul(mode, NULL, 10);
+    const char *keyer_mode = parameter_value(count, names, values, "keymode");
+    if (keyer_mode != NULL) settings.keyer_mode = (uint8_t)strtoul(keyer_mode, NULL, 10);
+    if (parameter_value(count, names, values, "revp") != NULL) {
+        settings.keyer_reversed = parameter_value(count, names, values, "rev") != NULL;
+    }
+    update_u16(&settings.keyer_hang_ms, "hang", count, names, values);
 
     update_u16(&settings.cw_wpm, "wpm", count, names, values);
     update_u16(&settings.cw_tone_hz, "cw", count, names, values);
@@ -92,11 +103,18 @@ static const char *save_handler(int count, char *names[], char *values[])
     save_validation = settings_validate(&settings);
     if (save_validation != SETTINGS_VALID || !settings_set(&settings)) {
         save_result = 2u;
-        return "/settings.shtml";
+        return complete_page;
     }
     keep_alive_set_enabled(settings.keep_alive_enabled != 0u);
     save_result = 1u;
-    return "/settings.shtml";
+    return complete_page;
+}
+
+const char *web_settings_save_handler(int index, int count,
+                                      char *names[], char *values[])
+{
+    (void)index;
+    return save_handler(count, names, values);
 }
 
 const char *web_settings_defaults_handler(int index, int count,
@@ -209,7 +227,7 @@ err_t httpd_post_receive_data(void *connection, struct pbuf *p)
 void httpd_post_finished(void *connection, char *response_uri,
                          u16_t response_uri_len)
 {
-    const char *result_uri = "/settings.shtml";
+    const char *result_uri = "/apply-complete.html";
     if (connection == post_connection && !post_overflow) {
         post_body[post_body_length] = '\0';
         char *names[LWIP_HTTPD_MAX_CGI_PARAMETERS];

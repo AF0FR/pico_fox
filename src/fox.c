@@ -26,9 +26,17 @@ static void transmit_sweep(void)
     audio_play_sweep();
 }
 
+static bool picofox_mode_active(void)
+{
+    fox_settings_t settings;
+    settings_get(&settings);
+    return settings.operating_mode == 0u;
+}
+
 void fox_run_cycle(void)
 {
-    if (!station_control_is_enabled()) {
+    if (!picofox_mode_active()) return;
+    if (!station_control_is_enabled() || !picofox_mode_active()) {
         workflow_set(WORKFLOW_STOPPED);
         radio_pause_ms(250u);
         return;
@@ -40,7 +48,7 @@ void fox_run_cycle(void)
     morse_transmit("FOX");
     workflow_set(WORKFLOW_PAUSE_1);
     radio_pause_ms(settings.fox_pause_ms);
-    if (!station_control_is_enabled()) {
+    if (!station_control_is_enabled() || !picofox_mode_active()) {
         workflow_set(WORKFLOW_STOPPED);
         return;
     }
@@ -49,7 +57,7 @@ void fox_run_cycle(void)
     transmit_warble();
     workflow_set(WORKFLOW_PAUSE_2);
     radio_pause_ms(settings.tone_pause_ms);
-    if (!station_control_is_enabled()) {
+    if (!station_control_is_enabled() || !picofox_mode_active()) {
         workflow_set(WORKFLOW_STOPPED);
         return;
     }
@@ -58,7 +66,7 @@ void fox_run_cycle(void)
     morse_transmit("FOX");
     workflow_set(WORKFLOW_PAUSE_3);
     radio_pause_ms(settings.fox_pause_ms);
-    if (!station_control_is_enabled()) {
+    if (!station_control_is_enabled() || !picofox_mode_active()) {
         workflow_set(WORKFLOW_STOPPED);
         return;
     }
@@ -67,7 +75,7 @@ void fox_run_cycle(void)
     transmit_sweep();
     workflow_set(WORKFLOW_PAUSE_4);
     radio_pause_ms(settings.tone_pause_ms);
-    if (!station_control_is_enabled()) {
+    if (!station_control_is_enabled() || !picofox_mode_active()) {
         workflow_set(WORKFLOW_STOPPED);
         return;
     }

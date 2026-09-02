@@ -4,12 +4,14 @@
 #define STATION_ID "KB0TLL"
 
 // Raspberry Pi Pico GPIO assignments.
-#define PTT_PIN   15u
-#define AUDIO_PIN 16u
+#define PTT_PIN   0u
+#define AUDIO_PIN 1u
 
-// USB power-bank keep-alive load. GP18 drives an external logic-level
+// USB power-bank keep-alive load. GP4 drives an external logic-level
 // N-channel MOSFET; it must not drive the load resistor directly.
-#define KEEP_ALIVE_PIN          18u
+#define KEEP_ALIVE_PIN          4u
+#define DIT_PIN                 2u
+#define DAH_PIN                 3u
 #define KEEP_ALIVE_ACTIVE_LEVEL 1
 #define KEEP_ALIVE_ENABLED      1
 #define KEEP_ALIVE_PULSE_MS     1000u
@@ -26,6 +28,11 @@
 #define CW_WPM     18u
 #define CW_TONE_HZ 500u
 #define AUDIO_GAIN_PERCENT 50u
+
+#define OPERATING_MODE_DEFAULT 0u
+#define KEYER_MODE_DEFAULT     0u
+#define KEYER_REVERSED_DEFAULT 0u
+#define KEYER_HANG_MS_DEFAULT  500u
 
 // Warble settings.
 #define WARBLE_LOW_HZ      300u

@@ -6,10 +6,12 @@
 #include "dhcpserver.h"
 #include "dnsserver.h"
 #include "lwip/apps/httpd.h"
+#include "lwip/apps/mdns.h"
 #include "lwip/ip4_addr.h"
 #include "pico/cyw43_arch.h"
 
 #include "config.h"
+#include "keyer.h"
 #include "settings.h"
 #include "station_control.h"
 #include "web_settings.h"
@@ -18,6 +20,12 @@
 static dhcp_server_t dhcp_server;
 static dns_server_t dns_server;
 static volatile bool reboot_requested;
+
+static void mdns_http_txt(struct mdns_service *service, void *txt_userdata)
+{
+    (void)txt_userdata;
+    mdns_resp_add_service_txtitem(service, "path=/", 6);
+}
 
 static const char *parameter_value(int count, char *names[], char *values[],
                                    const char *wanted)
@@ -48,6 +56,7 @@ static const char *station_handler(int index, int count, char *names[], char *va
     settings_get(&settings);
     const char *run = parameter_value(count, names, values, "run");
     const bool enabled = run != NULL && strcmp(run, "1") == 0;
+    if (!enabled) keyer_release_web_keys();
     settings.transmit_enabled = enabled;
     if (settings_set(&settings)) {
         station_control_set_enabled(enabled);
@@ -55,7 +64,35 @@ static const char *station_handler(int index, int count, char *names[], char *va
     return "/index.shtml";
 }
 
+static const char *mode_handler(int index, int count, char *names[], char *values[])
+{
+    (void)index;
+    const char *mode = parameter_value(count, names, values, "mode");
+    if (mode != NULL && (strcmp(mode, "0") == 0 || strcmp(mode, "1") == 0)) {
+        fox_settings_t settings;
+        settings_get(&settings);
+        settings.operating_mode = (uint8_t)(mode[0] - '0');
+        settings_set(&settings);
+        keyer_release_web_keys();
+    }
+    return "/key-state.txt";
+}
+
+static const char *key_handler(int index, int count, char *names[], char *values[])
+{
+    (void)index;
+    const char *key = parameter_value(count, names, values, "key");
+    const char *down = parameter_value(count, names, values, "down");
+    if (key != NULL && down != NULL) {
+        keyer_set_web_key(strcmp(key, "dah") == 0, strcmp(down, "1") == 0);
+    }
+    return "/key-state.txt";
+}
+
 static const tCGI cgi_handlers[] = {
+    {"/mode.cgi", mode_handler},
+    {"/key.cgi", key_handler},
+    {"/save.cgi", web_settings_save_handler},
     {"/reboot.cgi", reboot_handler},
     {"/station.cgi", station_handler},
     {"/defaults.cgi", web_settings_defaults_handler},
@@ -67,6 +104,7 @@ static const char *ssi_tags[] = {
     "txstatus", "startdis", "stopdis", "step", "stepid", "savecls", "savemsg",
     "did", "dssid", "dpass", "dka", "dwpm", "dcw", "dgain", "dwl", "dwh",
     "dws", "dwd", "dsl", "dsh", "dss", "dsm", "dsd", "dfp", "dtp", "didle"
+    , "mode", "keymode", "rev", "hang", "modename"
 };
 
 static u16_t ssi_handler(int index, char *output, int output_length)
@@ -131,6 +169,11 @@ static u16_t ssi_handler(int index, char *output, int output_length)
         case 41: return (u16_t)snprintf(output, output_length, "%u", d.fox_pause_ms);
         case 42: return (u16_t)snprintf(output, output_length, "%u", d.tone_pause_ms);
         case 43: return (u16_t)snprintf(output, output_length, "%u", d.idle_ms);
+        case 44: return (u16_t)snprintf(output, output_length, "%u", s.operating_mode);
+        case 45: return (u16_t)snprintf(output, output_length, "%u", s.keyer_mode);
+        case 46: return (u16_t)snprintf(output, output_length, "%s", s.keyer_reversed ? "checked" : "");
+        case 47: return (u16_t)snprintf(output, output_length, "%u", s.keyer_hang_ms);
+        case 48: return (u16_t)snprintf(output, output_length, "%s", s.operating_mode ? "PicoCW" : "PicoFox");
         default: return 0;
     }
 }
@@ -156,6 +199,10 @@ bool web_init(void)
     dhcp_server_init(&dhcp_server, &cyw43_state.netif[CYW43_ITF_AP],
                      &gateway, &netmask);
     dns_server_init(&dns_server, &cyw43_state.netif[CYW43_ITF_AP], &gateway);
+    mdns_resp_init();
+    mdns_resp_add_netif(&cyw43_state.netif[CYW43_ITF_AP], "picofox");
+    mdns_resp_add_service(&cyw43_state.netif[CYW43_ITF_AP], "PicoFox", "_http",
+                          DNSSD_PROTO_TCP, 80, mdns_http_txt, NULL);
     httpd_init();
     http_set_cgi_handlers(cgi_handlers, LWIP_ARRAYSIZE(cgi_handlers));
     http_set_ssi_handler(ssi_handler, ssi_tags, LWIP_ARRAYSIZE(ssi_tags));

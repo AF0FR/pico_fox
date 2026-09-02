@@ -14,6 +14,8 @@ typedef enum {
     WORKFLOW_IDLE,
     WORKFLOW_STOP_ID,
     WORKFLOW_REBOOT_ID,
+    WORKFLOW_KEYER_READY,
+    WORKFLOW_KEYER_ACTIVE,
 } workflow_step_t;
 
 void workflow_set(workflow_step_t step);
